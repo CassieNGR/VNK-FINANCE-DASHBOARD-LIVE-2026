@@ -557,7 +557,7 @@ function FilterBar({ period, setPeriod, range, setRange, dataSpan }) {
 
 
 /* ================= overview ================= */
-function Overview({ daily, setPage, openDay, soAll, ngrAll, ifsAll }) {
+function Overview({ daily, setPage, openDay, soAll, poAll, ngrAll, ifsAll }) {
   const [bucket, setBucket] = useState(null);
   if (!daily.length) return <EmptyNote text="No data for this range yet. Upload files from Import data." />;
   const first = daily[0], last = daily[daily.length - 1];
@@ -584,6 +584,12 @@ function Overview({ daily, setPage, openDay, soAll, ngrAll, ifsAll }) {
   const ngrIn = (r) => round2((ngrAll || []).filter((x) => x.date >= r.from && x.date <= r.to).reduce((s, x) => s + x.totalAmount, 0));
   const ifsIn = (r) => round2((ifsAll || []).filter((x) => x.date >= r.from && x.date <= r.to).reduce((s, x) => s + x.invoiceTotalAmount, 0));
   const pct = (now, prior) => (prior !== 0 ? ((now - prior) / Math.abs(prior)) * 100 : (now !== 0 ? 100 : 0));
+  const soIn = (r) => round2((soAll || []).filter((x) => x.date >= r.from && x.date <= r.to).reduce((s, x) => s + x.amount, 0));
+  const poIn = (r) => round2((poAll || []).filter((x) => x.date >= r.from && x.date <= r.to).reduce((s, x) => s + x.amount, 0));
+  const soYtdNow = soIn(ytdRange), soYtdPrior = soIn(lastYearRange);
+  const poYtdNow = poIn(ytdRange), poYtdPrior = poIn(lastYearRange);
+  const soYtdDelta = pct(soYtdNow, soYtdPrior);
+  const poYtdDelta = pct(poYtdNow, poYtdPrior);
 
   const mtdRows = [
     { label: "NGR sales", now: ngrIn(mtdRange), prior: ngrIn(lastMonthRange), accent: BLUE },
@@ -596,6 +602,11 @@ function Overview({ daily, setPage, openDay, soAll, ngrAll, ifsAll }) {
     { label: "IFS sales", now: ifsIn(ytdRange), prior: ifsIn(lastYearRange), accent: GOLD },
   ];
   ytdRows.push({ label: "Combined", now: round2(ytdRows[0].now + ytdRows[1].now), prior: round2(ytdRows[0].prior + ytdRows[1].prior), accent: GREEN, bold: true });
+
+  const qbYtdRows = [
+    { label: "QuickBooks sales", now: soYtdNow, prior: soYtdPrior, accent: AMBER },
+    { label: "QuickBooks purchases", now: poYtdNow, prior: poYtdPrior, accent: NAVY },
+  ];
 
   const ngrTotalAllTime = round2((ngrAll || []).reduce((s, x) => s + x.totalAmount, 0));
   const ifsTotalAllTime = round2((ifsAll || []).reduce((s, x) => s + x.invoiceTotalAmount, 0));
@@ -626,7 +637,15 @@ function Overview({ daily, setPage, openDay, soAll, ngrAll, ifsAll }) {
                 <td style={{ padding: "8px", textAlign: "right", fontWeight: r.bold ? 700 : 400 }}>{fmt$2(r.now)}</td>
                 <td style={{ padding: "8px", textAlign: "right", color: SUB }}>{fmt$2(r.prior)}</td>
                 <td style={{ padding: "8px", textAlign: "right", fontWeight: 700, color: change >= 0 ? GREEN : RED }}>{fmt$2(change)}</td>
-                <td style={{ padding: "8px", textAlign: "right", fontWeight: 700, color: p >= 0 ? GREEN : RED }}>{p >= 0 ? "+" : ""}{p.toFixed(1)}%</td>
+                <td style={{ padding: "8px", textAlign: "right", fontWeight: 700 }}>
+                  {r.prior === 0 && r.now === 0 ? (
+                    <span style={{ color: SUB, fontWeight: 500 }}>—</span>
+                  ) : r.prior === 0 ? (
+                    <span style={{ color: GREEN }}>New</span>
+                  ) : (
+                    <span style={{ color: p >= 0 ? GREEN : RED }}>{p >= 0 ? "+" : ""}{p.toFixed(1)}%</span>
+                  )}
+                </td>
               </tr>
             );
           })}
@@ -681,9 +700,13 @@ function Overview({ daily, setPage, openDay, soAll, ngrAll, ifsAll }) {
       <SectionCard title="QuickBooks reference data" style={{ background: "#FBFAF7" }}>
         <p style={{ fontSize: 12, color: SUB, margin: "0 0 14px" }}>Sales/purchase order activity from QuickBooks, shown for reference alongside the real sales figures above.</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
-          <KpiCard label="QuickBooks sales (range)" value={fmt$(totalSO)} sub={`${daily.reduce((s, d) => s + d.so_count, 0)} transactions`} icon={FileSpreadsheet} accent={AMBER} onClick={() => setPage("so")} />
-          <KpiCard label="QuickBooks purchases (range)" value={fmt$(totalPO)} sub={`${daily.reduce((s, d) => s + d.po_count, 0)} transactions`} icon={ShoppingCart} accent={AMBER} onClick={() => setPage("po")} />
+          <KpiCard label="QuickBooks sales (range)" value={fmt$(totalSO)} sub={`${daily.reduce((s, d) => s + d.so_count, 0)} transactions · YTD vs last yr`} delta={soYtdDelta} deltaGood={soYtdDelta >= 0} icon={FileSpreadsheet} accent={AMBER} onClick={() => setPage("so")} />
+          <KpiCard label="QuickBooks purchases (range)" value={fmt$(totalPO)} sub={`${daily.reduce((s, d) => s + d.po_count, 0)} transactions · YTD vs last yr`} delta={poYtdDelta} deltaGood={poYtdDelta >= 0} icon={ShoppingCart} accent={AMBER} onClick={() => setPage("po")} />
           <KpiCard label="Sales by customer" value="View report" sub="Compare periods, per customer" icon={ChevronRight} accent={NAVY} onClick={() => setPage("customer-sales")} />
+        </div>
+        <div style={{ marginTop: 18 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Year-to-date vs. last year</div>
+          <ComparisonTable rows={qbYtdRows} nowLabel="This year" priorLabel="Last year" />
         </div>
       </SectionCard>
 
@@ -1156,7 +1179,7 @@ function CustomerSalesPage({ soAll, salesDetailAll, qbSummaryAll }) {
 
   const totals = rows.reduce((acc, r) => ({ a: acc.a + r.a, b: acc.b + r.b }), { a: 0, b: 0 });
   const totalChange = round2(totals.a - totals.b);
-  const totalPct = totals.b !== 0 ? (totalChange / Math.abs(totals.b)) * 100 : 0;
+  const totalPct = totals.b !== 0 ? (totalChange / Math.abs(totals.b)) * 100 : (totals.a !== 0 ? 100 : 0);
 
   const qbDates = Object.keys(qbSummaryAll || {}).sort();
   const latestQbDate = qbDates[qbDates.length - 1];
@@ -1231,7 +1254,7 @@ function CustomerSalesPage({ soAll, salesDetailAll, qbSummaryAll }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
         <KpiCard label="Period A total" value={fmt$(totals.a)} sub={ranges.aLabel} icon={FileSpreadsheet} accent={BLUE} />
         <KpiCard label="Period B total" value={fmt$(totals.b)} sub={ranges.bLabel} icon={FileSpreadsheet} accent={GOLD} />
-        <KpiCard label="Change" value={fmt$(totalChange)} delta={totalPct} deltaGood={totalChange >= 0} icon={totalChange >= 0 ? TrendingUp : TrendingDown} accent={totalChange >= 0 ? GREEN : RED} />
+        <KpiCard label="Change" value={fmt$(totalChange)} sub={totals.b === 0 ? (totals.a === 0 ? "No data either period" : "New - no prior-year data") : undefined} delta={totals.b !== 0 ? totalPct : undefined} deltaGood={totalChange >= 0} icon={totalChange >= 0 ? TrendingUp : TrendingDown} accent={totalChange >= 0 ? GREEN : RED} />
       </div>
 
       <SectionCard title="Sales by customer">
@@ -1244,7 +1267,7 @@ function CustomerSalesPage({ soAll, salesDetailAll, qbSummaryAll }) {
             { key: "a", label: "Period A", align: "right", sortable: true, sortType: "number", render: (r) => fmt$2(r.a) },
             { key: "b", label: "Period B", align: "right", sortable: true, sortType: "number", render: (r) => fmt$2(r.b) },
             { key: "change", label: "$ Change", align: "right", sortable: true, sortType: "number", render: (r) => <span style={{ color: r.change >= 0 ? GREEN : RED, fontWeight: 700 }}>{fmt$2(r.change)}</span> },
-            { key: "pctChange", label: "% Change", align: "right", sortable: true, sortType: "number", render: (r) => <span style={{ color: r.pctChange >= 0 ? GREEN : RED, fontWeight: 700 }}>{r.pctChange >= 0 ? "+" : ""}{r.pctChange.toFixed(1)}%</span> },
+            { key: "pctChange", label: "% Change", align: "right", sortable: true, sortType: "number", render: (r) => r.b === 0 ? (r.a === 0 ? <span style={{ color: SUB }}>—</span> : <span style={{ color: GREEN, fontWeight: 700 }}>New</span>) : <span style={{ color: r.pctChange >= 0 ? GREEN : RED, fontWeight: 700 }}>{r.pctChange >= 0 ? "+" : ""}{r.pctChange.toFixed(1)}%</span> },
           ]}
         />
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 24, marginTop: 10, paddingTop: 10, borderTop: `2px solid ${NAVY}`, fontSize: 13 }}>
@@ -1267,7 +1290,7 @@ function CustomerSalesPage({ soAll, salesDetailAll, qbSummaryAll }) {
             { key: "a", label: "Period A", align: "right", sortable: true, sortType: "number", render: (r) => fmt$2(r.a) },
             { key: "b", label: "Period B", align: "right", sortable: true, sortType: "number", render: (r) => fmt$2(r.b) },
             { key: "dollarChange", label: "$ Change", align: "right", sortable: true, sortType: "number", render: (r) => <span style={{ color: r.dollarChange >= 0 ? GREEN : RED, fontWeight: 700 }}>{fmt$2(r.dollarChange)}</span> },
-            { key: "pctChange", label: "% Change", align: "right", sortable: true, sortType: "number", render: (r) => <span style={{ color: r.pctChange >= 0 ? GREEN : RED, fontWeight: 700 }}>{r.pctChange >= 0 ? "+" : ""}{r.pctChange.toFixed(1)}%</span> },
+            { key: "pctChange", label: "% Change", align: "right", sortable: true, sortType: "number", render: (r) => r.b === 0 ? (r.a === 0 ? <span style={{ color: SUB }}>—</span> : <span style={{ color: GREEN, fontWeight: 700 }}>New</span>) : <span style={{ color: r.pctChange >= 0 ? GREEN : RED, fontWeight: 700 }}>{r.pctChange >= 0 ? "+" : ""}{r.pctChange.toFixed(1)}%</span> },
           ]} />
         </SectionCard>
       )}
@@ -1577,7 +1600,7 @@ export default function App() {
         {page !== "import" && (
           <FilterBar period={period} setPeriod={setPeriod} range={range} setRange={setRange} dataSpan={dataSpan} />
         )}
-        {page === "overview" && <Overview daily={daily} setPage={setPage} openDay={setDayModal} soAll={soAll} ngrAll={ngrAll} ifsAll={ifsAll} />}
+        {page === "overview" && <Overview daily={daily} setPage={setPage} openDay={setDayModal} soAll={soAll} poAll={poAll} ngrAll={ngrAll} ifsAll={ifsAll} />}
         {page === "ar" && <ARPage daily={daily} openDay={setDayModal} />}
         {page === "ap" && <APPage daily={daily} openDay={setDayModal} />}
         {page === "so" && <TxnPage title="QuickBooks sales orders" daily={daily} kindKey="so" transactions={soFiltered} accent={BLUE} icon={FileSpreadsheet} onTxnClick={openTxn} />}
