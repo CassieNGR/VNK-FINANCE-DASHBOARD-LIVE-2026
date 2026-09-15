@@ -1184,6 +1184,10 @@ function CustomerSalesPage({ soAll, salesDetailAll, qbSummaryAll }) {
   const qbDates = Object.keys(qbSummaryAll || {}).sort();
   const latestQbDate = qbDates[qbDates.length - 1];
   const qbItems = latestQbDate ? qbSummaryAll[latestQbDate] : null;
+  const qbTotalA = qbItems ? round2(qbItems.reduce((s, r) => s + r.a, 0)) : 0;
+  const qbTotalB = qbItems ? round2(qbItems.reduce((s, r) => s + r.b, 0)) : 0;
+  const qbTotalChange = round2(qbTotalA - qbTotalB);
+  const qbTotalPct = qbTotalB !== 0 ? (qbTotalChange / Math.abs(qbTotalB)) * 100 : (qbTotalA !== 0 ? 100 : 0);
 
   const newCustomers = useMemo(
     () => rows.filter((r) => r.b === 0 && r.a > 0).sort((x, y) => y.a - x.a),
@@ -1285,6 +1289,19 @@ function CustomerSalesPage({ soAll, salesDetailAll, qbSummaryAll }) {
           <p style={{ fontSize: 12, color: SUB, margin: "0 0 12px" }}>
             As uploaded from QuickBooks, as of {shortDate(latestQbDate)}. Shown on its own terms - sales orders can include entries that haven't been invoiced yet, so this won't necessarily match the Sales Orders totals above, and that's expected.
           </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 18 }}>
+            <KpiCard label="Period A total" value={fmt$(qbTotalA)} icon={FileSpreadsheet} accent={BLUE} />
+            <KpiCard label="Period B total" value={fmt$(qbTotalB)} icon={FileSpreadsheet} accent={GOLD} />
+            <KpiCard
+              label="Change"
+              value={fmt$(qbTotalChange)}
+              sub={qbTotalB === 0 ? (qbTotalA === 0 ? "No data either period" : "New - no prior-year data") : undefined}
+              delta={qbTotalB !== 0 ? qbTotalPct : undefined}
+              deltaGood={qbTotalChange >= 0}
+              icon={qbTotalChange >= 0 ? TrendingUp : TrendingDown}
+              accent={qbTotalChange >= 0 ? GREEN : RED}
+            />
+          </div>
           <DataTable pageSize={10} rows={qbItems} defaultSort={{ key: "a", dir: "desc" }} columns={[
             { key: "customer", label: "Customer", wrap: true, sortable: true, sortType: "text" },
             { key: "a", label: "Period A", align: "right", sortable: true, sortType: "number", render: (r) => fmt$2(r.a) },
